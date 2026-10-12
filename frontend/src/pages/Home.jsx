@@ -1,10 +1,8 @@
-import { Navigate } from "react-router-dom";
-
 function Home() {
   return (
-<div>
-  Home
-</div>
+    <div>
+      Home
+    </div>
   );
 }
 
