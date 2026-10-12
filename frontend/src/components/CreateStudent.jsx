@@ -1,104 +1,82 @@
-import React, { useState } from 'react';
-import axios from 'axios';
+import { useState, useEffect } from 'react';
+import { useForm } from 'react-hook-form';
 import Loader from './Loader';
-
-const API_URL = import.meta.env.VITE_BACKEND_URL;
+import studentService from '../services/studentService';
+import { BRANCH_OPTIONS, YEAR_OPTIONS } from '../constants/student';
 
 function CreateStudent({ onClose, onStudentCreated }) {
+  const [serverError, setServerError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const [formData, setFormData] = useState({
-    name: '',
-    studentId: '',
-    email: '',
-    branch: '',
-    Year: ''
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm({
+    defaultValues: {
+      name: '',
+      studentId: '',
+      email: '',
+      branch: '',
+      Year: '',
+    },
   });
 
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && !loading) {
+        onClose();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [loading, onClose]);
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-
-    setError('');
-    setSuccess('');
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
+  const onSubmit = async (data) => {
     setLoading(true);
-    setError('');
+    setServerError('');
     setSuccess('');
 
     try {
-      const token = localStorage.getItem('token');
-
-      const response = await axios.post(
-        `${API_URL}/createStudent`,
-        {
-          name: formData.name.trim(),
-          studentId: formData.studentId.trim(),
-          email: formData.email.trim(),
-          branch: formData.branch,
-          Year: Number(formData.Year)
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        }
-      );
-
-      console.log("Student created:", response.data);
-
-      setSuccess("Student created successfully.");
-
-      setFormData({
-        name: '',
-        studentId: '',
-        email: '',
-        branch: '',
-        Year: ''
+      const response = await studentService.createStudent({
+        name: data.name.trim(),
+        studentId: data.studentId.trim(),
+        email: data.email.trim(),
+        branch: data.branch,
+        Year: Number(data.Year),
       });
 
+      setSuccess('Student created successfully.');
+      reset();
+
       if (onStudentCreated) {
-        onStudentCreated(response.data.student);
+        onStudentCreated(response.student);
       }
-
-    } catch (error) {
-      console.error(
-        "Create student error:",
-        error.response?.data || error.message
+    } catch (err) {
+      console.error('Create student error:', err.response?.data || err.message);
+      setServerError(
+        err.response?.data?.msg || 'Failed to create student'
       );
-
-      setError(
-        error.response?.data?.msg ||
-        "Failed to create student"
-      );
-
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-
-      <div className="bg-white w-full max-w-lg rounded-xl shadow-xl p-6">
-
+    <div
+      className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modal-title"
+    >
+      <div className="bg-white w-full max-w-lg rounded-xl shadow-xl p-6 relative animate-in fade-in zoom-in duration-150">
         <div className="flex justify-between items-center mb-6">
           <div>
-            <h2 className="text-xl font-semibold text-gray-900">
+            <h2 id="modal-title" className="text-xl font-semibold text-gray-900">
               Add Student
             </h2>
-
             <p className="text-sm text-gray-500">
               Enter student details below.
             </p>
@@ -107,125 +85,165 @@ function CreateStudent({ onClose, onStudentCreated }) {
           <button
             type="button"
             onClick={onClose}
-            className="text-gray-500 hover:text-gray-900 text-xl"
+            aria-label="Close add student dialog"
+            className="text-gray-500 hover:text-gray-900 text-2xl leading-none px-2 py-1 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             ×
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
+          {/* Name */}
           <div>
-            <label className="block text-sm font-medium mb-1">
+            <label htmlFor="student-name" className="block text-sm font-medium mb-1 text-gray-700">
               Name
             </label>
-
             <input
+              id="student-name"
               type="text"
-              name="name"
-              value={formData.name}
-              onChange={handleChange}
-              required
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
+              {...register('name', {
+                required: 'Name is required',
+                minLength: {
+                  value: 2,
+                  message: 'Name must be at least 2 characters',
+                },
+              })}
+              className={`w-full border rounded-lg px-3 py-2 outline-none focus:ring-2 ${
+                errors.name ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'
+              }`}
               placeholder="Student name"
             />
+            {errors.name && (
+              <p role="alert" className="text-xs text-red-600 mt-1">
+                {errors.name.message}
+              </p>
+            )}
           </div>
 
+          {/* Phone Number / Student ID */}
           <div>
-            <label className="block text-sm font-medium mb-1">
+            <label htmlFor="student-phone" className="block text-sm font-medium mb-1 text-gray-700">
               Phone Number
             </label>
-
             <input
-              type="text"
-              name="studentId"
-              value={formData.studentId}
-              onChange={handleChange}
-              required
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Phone number"
+              id="student-phone"
+              type="tel"
+              {...register('studentId', {
+                required: 'Phone number is required',
+                pattern: {
+                  value: /^[0-9]{10}$/,
+                  message: 'Please enter a valid 10-digit phone number',
+                },
+              })}
+              className={`w-full border rounded-lg px-3 py-2 outline-none focus:ring-2 ${
+                errors.studentId ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'
+              }`}
+              placeholder="10-digit phone number"
             />
+            {errors.studentId && (
+              <p role="alert" className="text-xs text-red-600 mt-1">
+                {errors.studentId.message}
+              </p>
+            )}
           </div>
 
+          {/* Email */}
           <div>
-            <label className="block text-sm font-medium mb-1">
+            <label htmlFor="student-email" className="block text-sm font-medium mb-1 text-gray-700">
               Email
             </label>
-
             <input
+              id="student-email"
               type="email"
-              name="email"
-              value={formData.email}
-              onChange={handleChange}
-              required
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
+              {...register('email', {
+                required: 'Email is required',
+                pattern: {
+                  value: /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/,
+                  message: 'Please enter a valid email address',
+                },
+              })}
+              className={`w-full border rounded-lg px-3 py-2 outline-none focus:ring-2 ${
+                errors.email ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'
+              }`}
               placeholder="student@example.com"
             />
+            {errors.email && (
+              <p role="alert" className="text-xs text-red-600 mt-1">
+                {errors.email.message}
+              </p>
+            )}
           </div>
 
+          {/* Branch */}
           <div>
-            <label className="block text-sm font-medium mb-1">
+            <label htmlFor="student-branch" className="block text-sm font-medium mb-1 text-gray-700">
               Branch
             </label>
-
             <select
-              name="branch"
-              value={formData.branch}
-              onChange={handleChange}
-              required
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-blue-500"
+              id="student-branch"
+              {...register('branch', { required: 'Please select a branch' })}
+              className={`w-full border rounded-lg px-3 py-2 bg-white outline-none focus:ring-2 ${
+                errors.branch ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'
+              }`}
             >
               <option value="">Select branch</option>
-              <option value="CSE">CSE</option>
-              <option value="CSAI">CSAI</option>
-              <option value="AIDS">AIDS</option>
-              <option value="IT">IT</option>
-              <option value="ECE">ECE</option>
-              <option value="EE">EE</option>
-              <option value="ME">ME</option>
-              <option value="CE">CE</option>
+              {BRANCH_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
             </select>
+            {errors.branch && (
+              <p role="alert" className="text-xs text-red-600 mt-1">
+                {errors.branch.message}
+              </p>
+            )}
           </div>
 
+          {/* Year */}
           <div>
-            <label className="block text-sm font-medium mb-1">
+            <label htmlFor="student-year" className="block text-sm font-medium mb-1 text-gray-700">
               Year
             </label>
-
             <select
-              name="Year"
-              value={formData.Year}
-              onChange={handleChange}
-              required
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-blue-500"
+              id="student-year"
+              {...register('Year', { required: 'Please select a year' })}
+              className={`w-full border rounded-lg px-3 py-2 bg-white outline-none focus:ring-2 ${
+                errors.Year ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'
+              }`}
             >
               <option value="">Select year</option>
-              <option value="1">1st Year</option>
-              <option value="2">2nd Year</option>
-              <option value="3">3rd Year</option>
-              <option value="4">4th Year</option>
+              {YEAR_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
             </select>
+            {errors.Year && (
+              <p role="alert" className="text-xs text-red-600 mt-1">
+                {errors.Year.message}
+              </p>
+            )}
           </div>
 
-          {error && (
-            <p className="text-sm text-red-600">
-              {error}
+          {serverError && (
+            <p role="alert" className="text-sm text-red-600">
+              {serverError}
             </p>
           )}
 
           {success && (
-            <p className="text-sm text-green-600">
+            <p role="status" className="text-sm text-green-600">
               {success}
             </p>
           )}
 
           <div className="flex justify-end gap-3 pt-2">
-
             <button
               type="button"
               onClick={onClose}
               disabled={loading}
-              className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+              className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 text-sm font-medium text-gray-700"
             >
               Cancel
             </button>
@@ -233,18 +251,14 @@ function CreateStudent({ onClose, onStudentCreated }) {
             <button
               type="submit"
               disabled={loading}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2 text-sm font-medium"
             >
               {loading && <Loader />}
-              {loading ? "Creating..." : "Create Student"}
+              {loading ? 'Creating...' : 'Create Student'}
             </button>
-
           </div>
-
         </form>
-
       </div>
-
     </div>
   );
 }
